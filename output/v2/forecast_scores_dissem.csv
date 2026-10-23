@@ -1,0 +1,11 @@
+metric,forecast,clim_raw,uncond,vs_clim,vs_uncond,vs_clim_kind
+Brier,0.542,0.5391,0.5481,-0.0052,0.0113,skill
+RPS,0.4638,0.4779,0.557,0.0295,0.1672,skill
+AUC,0.8427,0.853,0.8387,-0.0103,0.0039,difference
+cov_1week,0.569,0.5652,0.5039,0.0038,0.0651,difference
+cov_2week,0.7485,0.7448,0.6829,0.0037,0.0656,difference
+cov_msg_interval,0.8154,0.7877,0.756,0.0277,0.0594,difference
+msg_prob_stated,0.7931,0.7068,0.6808,0.0863,0.1123,difference
+uncertain_frac,0.1087,,,,,
+mean_set_size,1.8977,,,,,
+dropped_onset_before_init_frac,0.0476,,,,,

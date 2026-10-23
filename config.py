@@ -37,16 +37,27 @@ def resolve(*candidates, glob=None):
 # ────────────────────────────────────────────────────────────────────────────
 # 2. INPUT FILES  (see README §"Input folders" for the verification_data/ layout)
 # ────────────────────────────────────────────────────────────────────────────
-FORECAST_ROOT = INPUT_ROOT / "forecasts"                 # holds the two "Blend output from ..." trees
+FORECAST_ROOT = INPUT_ROOT / "forecasts"                 # holds All_weekly/ and Dissemination/, each
+                                                           # containing the two "Blend output from ..." trees
 ONSET_CSV     = lambda: resolve("onset_dates_2026.csv")  # one row per subdistrict: id, onset_date
 CLIM_WIDE     = lambda: resolve("imd_subdistrict_esri_unc_clim_wide (1).csv",
                                 "imd_subdistrict_esri_unc_clim_wide.csv")      # unconditional clim PMF
 DISSEM_CSV    = lambda: resolve("dissemination_subdistricts.csv")              # dissemination region ids
 
-# Forecast source-folder names inside FORECAST_ROOT
+# Forecast source-folder names inside FORECAST_ROOT / {ALL_WEEKLY_DIR,DISSEM_DIR}
 SRC_V11 = "Blend output from aifsv1.1"
 SRC_V2  = "Blend output from aifsv2"
 SOURCES = (SRC_V11, SRC_V2)
+
+# The two forecast trees under FORECAST_ROOT: every subdistrict every week ("all weekly"),
+# vs. only the subdistricts still not-yet-declared-onset that week ("dissemination").
+ALL_WEEKLY_DIR = "All_weekly"
+DISSEM_DIR     = "Dissemination"
+
+def forecast_root(dissemination: bool) -> Path:
+    """Root to search for forecast files, given whether to use the dissemination-filtered
+    tree (shrinks week to week) or the all-weekly tree (every subdistrict, every week)."""
+    return FORECAST_ROOT / (DISSEM_DIR if dissemination else ALL_WEEKLY_DIR)
 
 # ────────────────────────────────────────────────────────────────────────────
 # 3. THE FORECAST SETS TO SCORE  (init dates are WEEKLY), one per AIFS version.

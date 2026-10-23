@@ -30,6 +30,17 @@ def cutoff():
 def dissemination_ids():
     return set(pd.read_csv(C.DISSEM_CSV())["id"].astype(int))
 
+# ── CLI helpers shared by score.py / reliability.py / run_all.py ────────────
+VERSION_ALIASES = {"v1p1": "1p1", "1p1": "1p1", "v2": "v2"}   # accept either spelling on the CLI
+
+def str2bool(v):
+    """argparse type= helper so --dissemination takes an explicit True/False."""
+    if isinstance(v, bool): return v
+    s = str(v).strip().lower()
+    if s in ("true", "1", "yes", "y"): return True
+    if s in ("false", "0", "no", "n"): return False
+    raise ValueError(f"invalid boolean for --dissemination: {v!r} (use True or False)")
+
 # ── unconditional climatology: 6-bin PMF for any init date F ─────────────────
 class Climatology:
     """Wraps the wide climatology table: one row per subdistrict, one column per calendar
@@ -66,14 +77,18 @@ class Climatology:
         return out
 
 # ── forecast registry + per-file loading (forecast PMF + conditional clim PMF)─
-def forecast_registry():
+def forecast_registry(root=None):
     """Map every available forecast to its file: {(source, init_date): path}. Walks the
     forecast tree for dated folders named YYYYMMDDT00 and parses the date from the name.
     Uses blend_output_full.csv, or else the folder's other full-PMF blend file (e.g. the
-    1 Jul issuance is named blend_output_jul1.csv)."""
+    1 Jul issuance is named blend_output_jul1.csv).
+
+    `root` selects which forecast tree to search (config.forecast_root(True/False) for the
+    Dissemination/All_weekly split); defaults to config.FORECAST_ROOT for backward compat."""
+    root = root if root is not None else C.FORECAST_ROOT
     reg = {}
     for s in C.SOURCES:
-        for d in sorted(glob.glob(str(C.FORECAST_ROOT / s / "**" / "2026*T00"), recursive=True)):
+        for d in sorted(glob.glob(str(root / s / "**" / "2026*T00"), recursive=True)):
             n = os.path.basename(d)                                  # e.g. "20260610T00"
             files = [Path(d) / "blend_output_full.csv"] + sorted(Path(d).glob("blend_output_jul*.csv"))
             hit = next((f for f in files if f.exists()), None)
@@ -101,11 +116,14 @@ def true_cat(o, F):
     return 0 if dl <= 0 else 1 if dl <= 7 else 2 if dl <= 14 else 3 if dl <= 21 else 4 if dl <= 28 else 5
 
 # ── THE CORE: iterate scorable cases ─────────────────────────────────────────
-def cases(jobs=None, ids_subset=None):
+def cases(jobs=None, ids_subset=None, forecast_root=None):
     """
     Yield one dict per (subdistrict, forecast-date) case, with 6-bin PMFs for the three
     systems and the resolution / outcome bookkeeping.  Forecasts issued after a
     subdistrict's onset are skipped (the 'earlier' outcome would be trivial).
+
+    `forecast_root` is passed straight to forecast_registry() to pick the All_weekly vs
+    Dissemination tree; defaults to config.FORECAST_ROOT (flat layout) if not given.
 
     Yielded dict keys:
       id, F                      subdistrict id, forecast init date
@@ -123,10 +141,13 @@ def cases(jobs=None, ids_subset=None):
     cut = cutoff()                                        # last date whose outcome is knowable
     od = load_onsets()                                    # id -> onset date
     clim = Climatology()
-    reg = forecast_registry()
+    reg = forecast_registry(forecast_root)
     keep = None if ids_subset is None else set(ids_subset)  # optional id filter (e.g. dissemination)
 
     for s, F in jobs:                                     # each (source, init date) in the forecast set
+        if (s, F) not in reg:                             # e.g. v1.1 was never disseminated past early Jul
+            print(f"  (skipping {s}, {F:%Y-%m-%d}: no forecast file found under this tree)")
+            continue
         ids, fc, cr = load_forecast(reg[(s, F)])
         Ek  = [F + pd.Timedelta(days=7*k) for k in (1, 2, 3, 4)]   # week-end dates F+7 .. F+28
         F28 = F + pd.Timedelta(days=28)                  # end of week 4 (boundary of "later")

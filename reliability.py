@@ -25,16 +25,21 @@ def curve(p, o):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--version", required=True, choices=list(C.FORECAST_SETS),
-                    help="AIFS version to score (see config.FORECAST_SETS)")
+    ap.add_argument("--version", required=True, choices=sorted(common.VERSION_ALIASES),
+                    help="AIFS version to score: v1p1 (or 1p1) / v2")
+    ap.add_argument("--dissemination", type=common.str2bool, nargs="?", const=True, default=False,
+                    help="True = Dissemination forecast tree; False (default) = All_weekly tree")
     a = ap.parse_args()
+    version = common.VERSION_ALIASES[a.version]
+    froot = C.forecast_root(a.dissemination)
+    tag = "_dissem" if a.dissemination else ""
     P = {k: [] for k in range(1, 6)}; Cc = {k: [] for k in range(1, 6)}; O = {k: [] for k in range(1, 6)}
-    for c in common.cases(C.FORECAST_SETS[a.version]):
+    for c in common.cases(C.FORECAST_SETS[version], forecast_root=froot):
         if c["earlier"]: continue                    # onset already occurred at init -> not scored
         for k in range(1, 6):
             if c["resolved"][k]:
                 P[k].append(c["p"]["fc"][k]); Cc[k].append(c["p"]["clim"][k]); O[k].append(c["oo"][k])
-    out_dir = C.OUTPUT_DIR / C.VERSION_DIR[a.version]
+    out_dir = C.OUTPUT_DIR / C.VERSION_DIR[version]
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 10)); axes = axes.ravel()
     # panels 0..4: per bin
@@ -53,10 +58,11 @@ def main():
     for k in range(1, 6): ax.hist(P[k], bins=EDGES, histtype="step", label=BIN_NAMES[k], lw=1.3)
     ax.set_title("AIFS forecast probability distribution (sharpness)", fontsize=11)
     ax.set_xlabel("forecast probability"); ax.set_ylabel("count"); ax.legend(fontsize=8); ax.set_yscale("log")
-    fig.suptitle(f"Reliability by bin — {a.version} forecasts vs clim_raw", fontsize=13)
+    tree = "Dissemination" if a.dissemination else "All_weekly"
+    fig.suptitle(f"Reliability by bin — {version} forecasts ({tree}) vs clim_raw", fontsize=13)
     fig.tight_layout(rect=[0, 0, 1, 0.98])
     out_dir.mkdir(parents=True, exist_ok=True)
-    o1 = out_dir / "reliability_by_bin.png"; fig.savefig(o1, dpi=150, bbox_inches="tight"); print("wrote", o1)
+    o1 = out_dir / f"reliability_by_bin{tag}.png"; fig.savefig(o1, dpi=150, bbox_inches="tight"); print("wrote", o1)
 
     # joint (all bins pooled)
     pf = np.concatenate([P[k] for k in range(1, 6)]); pc = np.concatenate([Cc[k] for k in range(1, 6)])
@@ -68,7 +74,7 @@ def main():
     ax.axhline(oo.mean(), color="#666", lw=0.6, ls=":", label=f"base rate {oo.mean():.2f}")
     ax.set_xlim(0, 1); ax.set_ylim(0, 1); ax.set_xlabel("forecast probability"); ax.set_ylabel("observed frequency")
     ax.set_title(f"Reliability, all bins pooled  (n={len(oo)})", fontsize=12); ax.legend(fontsize=9); ax.grid(lw=0.3, alpha=0.4)
-    o2 = out_dir / "reliability_joint.png"; fig2.savefig(o2, dpi=150, bbox_inches="tight"); print("wrote", o2)
+    o2 = out_dir / f"reliability_joint{tag}.png"; fig2.savefig(o2, dpi=150, bbox_inches="tight"); print("wrote", o2)
 
 if __name__ == "__main__":
     main()

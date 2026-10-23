@@ -76,7 +76,7 @@ def window_dates(bins, F):
     if hi == 5: return f">{start - pd.Timedelta(days=1):%Y-%m-%d}"
     return f"{start:%Y-%m-%d}..{end:%Y-%m-%d}"
 
-def collect(jobs=None, ids_subset=None):
+def collect(jobs=None, ids_subset=None, forecast_root=None):
     """Iterate every scorable case and accumulate everything the metrics need.
       • Brier/AUC pool INDIVIDUAL resolved bins across all cases (P[k] vs O), also kept per bin.
       • RPS and coverage are PER-CASE, then averaged.
@@ -87,7 +87,7 @@ def collect(jobs=None, ids_subset=None):
     covA = {k: [] for k in KEYS}; probA = {k: [] for k in KEYS}  # message rule: hits + window probability
     ksizes = []; n_uncertain = 0; n_total = 0; n_earlier = 0
     od = common.load_onsets(); rows = []
-    for c in common.cases(jobs, ids_subset):
+    for c in common.cases(jobs, ids_subset, forecast_root):
         n_total += 1
         if c["earlier"]:                                  # onset already occurred at init -> dropped, counted
             n_earlier += 1; continue
@@ -150,16 +150,21 @@ def collect(jobs=None, ids_subset=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--version", required=True, choices=list(C.FORECAST_SETS),
-                    help="AIFS version to score (see config.FORECAST_SETS)")
-    ap.add_argument("--dissemination", action="store_true", help="restrict to the dissemination region")
+    ap.add_argument("--version", required=True, choices=sorted(common.VERSION_ALIASES),
+                    help="AIFS version to score: v1p1 (or 1p1) / v2")
+    ap.add_argument("--dissemination", type=common.str2bool, nargs="?", const=True, default=False,
+                    help="True = score the Dissemination forecast tree (subdistricts shrink week to "
+                         "week as onset is declared); False (default) = the All_weekly tree (every "
+                         "subdistrict, every week)")
     a = ap.parse_args()
-    ids = common.dissemination_ids() if a.dissemination else None
-    r, cases_df = collect(C.FORECAST_SETS[a.version], ids_subset=ids)
+    version = common.VERSION_ALIASES[a.version]
+    froot = C.forecast_root(a.dissemination)
+    r, cases_df = collect(C.FORECAST_SETS[version], forecast_root=froot)
     tag = "_dissem" if a.dissemination else ""
-    out_dir = C.OUTPUT_DIR / C.VERSION_DIR[a.version]
+    out_dir = C.OUTPUT_DIR / C.VERSION_DIR[version]
     mm = r["_meta"]
-    print(f"forecast version: {a.version}  cutoff={common.cutoff():%Y-%m-%d}  "
+    print(f"forecast version: {version}  tree={'Dissemination' if a.dissemination else 'All_weekly'}  "
+          f"cutoff={common.cutoff():%Y-%m-%d}  "
           f"resolved bins={mm['resolved_bins']}  positives={mm['positives']}  "
           f"coverage cases={mm['coverage_cases']}")
     print(f"cases DROPPED (onset on/before init F): "
